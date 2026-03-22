@@ -1,0 +1,73 @@
+# Build outputs
+bin/
+obj/
+
+# IDE files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# JetBrains Rider
+*.sln.iml
+
+# User-specific files
+appsettings.local.json
+appsettings.*.local.json
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# User secrets 
+secrets.json
+
+# Publish output
+publish/
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# NuGet
+*.nupkg
+.nuget/
+packages/
+
+# Test results
+TestResults/
+*.trx
+
+# Code coverage
+coverage/
+*.coverage
+*.coveragexml
+
+# Resharper
+_ReSharper*/
+*.DotSettings.user
+
+# NCrunch
+*.ncrunch*
+_NCrunch_*
+
+# Dotnet tools
+.dotnet/
+
+# Local environment
+.env
+.env.local
