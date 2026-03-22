@@ -57,6 +57,40 @@ public class TelegramBotService(
         await Task.Delay(Timeout.Infinite, stoppingToken);
     }
 
+    /// <summary>
+    /// Extracts raw text from a message, restoring || characters that Telegram interprets as spoiler markers.
+    /// This is needed because code with || (OR operators) gets mangled by Telegram's spoiler formatting.
+    /// </summary>
+    private static string ExtractRawTextWithSpoilers(Message message)
+    {
+        var text = message.Text ?? string.Empty;
+        var entities = message.Entities;
+        
+        if (entities == null || entities.Length == 0)
+            return text;
+        
+        // Find spoiler entities and restore the || markers
+        var spoilerEntities = entities
+            .Where(e => e.Type == MessageEntityType.Spoiler)
+            .OrderByDescending(e => e.Offset) // Process from end to start to keep offsets valid
+            .ToList();
+        
+        if (spoilerEntities.Count == 0)
+            return text;
+        
+        var sb = new StringBuilder(text);
+        foreach (var entity in spoilerEntities)
+        {
+            var endPos = entity.Offset + entity.Length;
+            if (endPos <= sb.Length)
+                sb.Insert(endPos, "||");
+            if (entity.Offset <= sb.Length)
+                sb.Insert(entity.Offset, "||");
+        }
+        
+        return sb.ToString();
+    }
+
     private async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken ct)
     {
         if (update.Message is not { Text: { } text } message)
@@ -86,7 +120,7 @@ public class TelegramBotService(
             // Check if user is in add solution flow
             if (_addStates.TryGetValue(chatId, out var addState))
             {
-                await HandleAddSolutionInputAsync(bot, chatId, text, addState, ct);
+                await HandleAddSolutionInputAsync(bot, chatId, message, addState, ct);
                 return;
             }
 
@@ -131,6 +165,9 @@ public class TelegramBotService(
                 case "/stats":
                     await HandleStatsAsync(bot, chatId, ct);
                     break;
+                case "/view":
+                    await HandleViewSolutionAsync(bot, chatId, text, ct);
+                    break;
                 case "/pause":
                     await HandlePauseAsync(bot, chatId, true, ct);
                     break;
@@ -161,6 +198,7 @@ public class TelegramBotService(
             
             <b>Solution Management:</b>
             /solutions - List your solutions
+            /view [id] - View solution code
             /add - Add a prepared (unsubmitted) solution
             /addsubmitted - Add an already submitted solution
             /delete [id] - Delete a solution
@@ -541,8 +579,10 @@ public class TelegramBotService(
         await bot.SendMessage(chatId, instructions, parseMode: ParseMode.Html, cancellationToken: ct);
     }
 
-    private async Task HandleAddSolutionInputAsync(ITelegramBotClient bot, long chatId, string text, AddSolutionState state, CancellationToken ct)
+    private async Task HandleAddSolutionInputAsync(ITelegramBotClient bot, long chatId, Message message, AddSolutionState state, CancellationToken ct)
     {
+        var text = message.Text ?? string.Empty;
+        
         if (text.ToLowerInvariant() == "/cancel")
         {
             _addStates.Remove(chatId);
@@ -614,10 +654,10 @@ public class TelegramBotService(
             return;
         }
 
-        // Step 3: Code
+        // Step 3: Code - Use raw text extraction to restore || operators that Telegram treats as spoiler markers
         if (state.Code == null)
         {
-            var code = text.Trim();
+            var code = ExtractRawTextWithSpoilers(message).Trim();
             if (code.Length < 10)
             {
                 await bot.SendMessage(chatId, "❌ Code seems too short. Please paste the complete solution.", cancellationToken: ct);
@@ -742,6 +782,97 @@ public class TelegramBotService(
             $"{(newState ? "✅" : "⏸️")} <code>{solution.ProblemSlug}</code> is now {(newState ? "enabled" : "disabled")}.", 
             parseMode: ParseMode.Html, 
             cancellationToken: ct);
+    }
+
+    private async Task HandleViewSolutionAsync(ITelegramBotClient bot, long chatId, string text, CancellationToken ct)
+    {
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2 || !int.TryParse(parts[1], out var solutionId))
+        {
+            await bot.SendMessage(chatId, "Usage: <code>/view [solution_id]</code>\n\nUse /solutions to see IDs.", parseMode: ParseMode.Html, cancellationToken: ct);
+            return;
+        }
+
+        using var scope = services.CreateScope();
+        var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+        var solutionRepo = scope.ServiceProvider.GetRequiredService<ISolutionRepository>();
+
+        var user = await userRepo.GetByTelegramChatIdAsync(chatId, ct);
+        if (user == null)
+        {
+            await bot.SendMessage(chatId, "⚠️ Not connected.", cancellationToken: ct);
+            return;
+        }
+
+        var solution = await solutionRepo.GetByIdAsync(solutionId, ct);
+        if (solution == null || solution.UserId != user.Id)
+        {
+            await bot.SendMessage(chatId, "❌ Solution not found.", cancellationToken: ct);
+            return;
+        }
+
+        var typeEmoji = solution.IsSubmittedToLeetCode ? "🔄" : "📦";
+        var typeText = solution.IsSubmittedToLeetCode ? "Already Submitted" : "Prepared";
+        var statusText = solution.IsEnabled ? "Enabled" : "Disabled";
+        
+        // Escape HTML entities in code for display
+        var escapedCode = solution.Code
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;");
+
+        var message = $"""
+            {typeEmoji} <b>Solution #{solution.Id}</b>
+
+            📝 Problem: <code>{solution.ProblemSlug}</code>
+            💻 Language: {solution.Language}
+            📊 Type: {typeText}
+            ⚙️ Status: {statusText}
+            📅 Added: {solution.AddedAt:yyyy-MM-dd HH:mm} UTC
+            🔄 Submissions: {solution.SubmissionCount}
+
+            <b>Code:</b>
+            <pre>{escapedCode}</pre>
+            """;
+
+        // Telegram has a 4096 character limit per message
+        if (message.Length > 4000)
+        {
+            // Send info first, then code separately
+            var infoMessage = $"""
+                {typeEmoji} <b>Solution #{solution.Id}</b>
+
+                📝 Problem: <code>{solution.ProblemSlug}</code>
+                💻 Language: {solution.Language}
+                📊 Type: {typeText}
+                ⚙️ Status: {statusText}
+                📅 Added: {solution.AddedAt:yyyy-MM-dd HH:mm} UTC
+                🔄 Submissions: {solution.SubmissionCount}
+                """;
+            await bot.SendMessage(chatId, infoMessage, parseMode: ParseMode.Html, cancellationToken: ct);
+            
+            // Send code in chunks if needed
+            var codeMessage = $"<b>Code:</b>\n<pre>{escapedCode}</pre>";
+            if (codeMessage.Length > 4000)
+            {
+                // Split code into chunks
+                var chunkSize = 3900;
+                for (var i = 0; i < escapedCode.Length; i += chunkSize)
+                {
+                    var chunk = escapedCode.Substring(i, Math.Min(chunkSize, escapedCode.Length - i));
+                    var prefix = i == 0 ? "<b>Code:</b>\n" : "";
+                    await bot.SendMessage(chatId, $"{prefix}<pre>{chunk}</pre>", parseMode: ParseMode.Html, cancellationToken: ct);
+                }
+            }
+            else
+            {
+                await bot.SendMessage(chatId, codeMessage, parseMode: ParseMode.Html, cancellationToken: ct);
+            }
+        }
+        else
+        {
+            await bot.SendMessage(chatId, message, parseMode: ParseMode.Html, cancellationToken: ct);
+        }
     }
 
     private async Task HandleStatsAsync(ITelegramBotClient bot, long chatId, CancellationToken ct)
