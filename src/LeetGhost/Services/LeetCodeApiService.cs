@@ -44,7 +44,7 @@ public class LeetCodeApiService(IHttpClientFactory httpClientFactory, ILogger<Le
     {
         var client = httpClientFactory.CreateClient();
         client.BaseAddress = new Uri(BaseUrl);
-        client.DefaultRequestHeaders.Add("Cookie", $"INGRESSCOOKIE={user.SessionCookie}; csrftoken={user.CsrfToken}");
+        client.DefaultRequestHeaders.Add("Cookie", $"LEETCODE_SESSION={user.SessionCookie}; csrftoken={user.CsrfToken}");
         client.DefaultRequestHeaders.Add("x-csrftoken", user.CsrfToken);
         client.DefaultRequestHeaders.Add("Referer", BaseUrl);
         client.DefaultRequestHeaders.Add("Origin", BaseUrl);
@@ -62,7 +62,7 @@ public class LeetCodeApiService(IHttpClientFactory httpClientFactory, ILogger<Le
         {
             var client = httpClientFactory.CreateClient();
             client.BaseAddress = new Uri(BaseUrl);
-            client.DefaultRequestHeaders.Add("Cookie", $"INGRESSCOOKIE={sessionCookie}; csrftoken={csrfToken}");
+            client.DefaultRequestHeaders.Add("Cookie", $"LEETCODE_SESSION={sessionCookie}; csrftoken={csrfToken}");
             client.DefaultRequestHeaders.Add("x-csrftoken", csrfToken);
             client.DefaultRequestHeaders.Add("Referer", BaseUrl);
             client.Timeout = TimeSpan.FromSeconds(15);

@@ -237,7 +237,7 @@ public class TelegramBotService(
             3. Find <code>leetcode.com</code> cookies
 
             Send me your credentials in this format:
-            <code>INGRESSCOOKIE:your_INGRESSCOOKIE_value
+            <code>SESSION:your_leetcode_session_value
             CSRF:your_csrftoken_value</code>
 
             ⚠️ Keep "Remember me" checked when logging in for longer sessions.
