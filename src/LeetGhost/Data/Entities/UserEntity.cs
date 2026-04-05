@@ -23,7 +23,7 @@ public class UserEntity
     public string? LeetCodeUsername { get; set; }
 
     /// <summary>
-    /// LeetCode session cookie.
+    /// LeetCode session cookie (INGRESSCOOKIE value).
     /// </summary>
     public string? SessionCookie { get; set; }
 
