@@ -318,12 +318,26 @@ public class TelegramBotService(
         var emoji = status.HasSubmittedToday ? "✅" : "⚠️";
         var streakEmoji = status.CurrentStreak > 0 ? "🔥" : "";
 
+        // Calculate time remaining until end of day in UTC
+        var timeRemainingText = "";
+        if (!status.HasSubmittedToday)
+        {
+            var nowUtc = DateTime.UtcNow;
+            var endOfDayUtc = nowUtc.Date.AddDays(1);
+            var timeRemaining = endOfDayUtc - nowUtc;
+            
+            var hours = (int)timeRemaining.TotalHours;
+            var minutes = timeRemaining.Minutes;
+            
+            timeRemainingText = $"\n⏰ Time left: <b>{hours}h {minutes}m</b> until day ends (UTC)";
+        }
+
         var message = $"""
             {emoji} <b>Streak Status</b>
 
             {streakEmoji} Current streak: <b>{status.CurrentStreak}</b> days
             🏆 Longest streak: <b>{status.LongestStreak}</b> days
-            📅 Submitted today: {(status.HasSubmittedToday ? "Yes" : "No")}
+            📅 Submitted today: {(status.HasSubmittedToday ? "Yes" : "No")}{timeRemainingText}
             👤 User: {user.LeetCodeUsername}
             ⚙️ Auto-submit: {(user.IsEnabled ? "Enabled" : "Paused")}
             
