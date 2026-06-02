@@ -1,23 +1,31 @@
-# fly.toml app configuration file generated for leetghost
+# fly.toml app configuration file generated for leetghost on 2026-06-02T21:05:00Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "leetghost"
-primary_region = "iad"
+app = 'leetghost'
+primary_region = 'iad'
 
 [build]
 
 [env]
-  ASPNETCORE_ENVIRONMENT = "Production"
-  # Override the database path to use the persistent volume
-  ConnectionStrings__DefaultConnection = "Data Source=/data/leetghost.db"
-
-# Ми прибрали [http_service], бо боту не потрібен відкритий порт ззовні.
-# Telegram Bot API працює через вихідні HTTP-запити (Long Polling).
+  ASPNETCORE_ENVIRONMENT = 'Production'
+  ConnectionStrings__DefaultConnection = 'Data Source=/data/leetghost.db'
 
 [[mounts]]
-  source = "bot_data"
-  destination = "/data"
+  source = 'bot_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
 
 [[vm]]
-  memory = "256mb" # Зменшено до 256mb, щоб залізо вписувалося у Free Tier
-  cpu_kind = "shared"
+  memory = '256mb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256
